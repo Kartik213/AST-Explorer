@@ -1,11 +1,8 @@
 import { Parser, Tree, Language } from "web-tree-sitter"
 
 let parserInstance: Parser | null = null
+const languageCache: Record<string, Language> = {}
 
-/**
- * Initializes the Tree-sitter parser and loads the JavaScript language.
- * Safe to call multiple times; it will only initialize once.
- */
 export async function initTreeSitter(): Promise<void> {
   if (parserInstance) return
 
@@ -15,27 +12,33 @@ export async function initTreeSitter(): Promise<void> {
         return scriptName
       },
     })
-
-    const newParser = new Parser()
-    const lang = await Language.load("/tree-sitter-javascript.wasm")
-    newParser.setLanguage(lang)
-    
-    parserInstance = newParser
+    parserInstance = new Parser()
   } catch (err) {
     console.error("Failed to initialize Tree-sitter:", err)
     throw err
   }
 }
 
-/**
- * Parses the provided source code into an AST Tree.
- * Returns null if the parser has not been initialized.
- */
-export function parseCode(code: string): Tree | null {
-  if (!parserInstance) {
-    console.warn("parseCode called before initTreeSitter")
-    return null
+export async function setLanguage(langName: string): Promise<void> {
+  if (!parserInstance) throw new Error("Parser not initialized")
+  
+  if (languageCache[langName]) {
+    parserInstance.setLanguage(languageCache[langName])
+    return
   }
+
+  try {
+    const lang = await Language.load(`/grammars/tree-sitter-${langName}.wasm`)
+    languageCache[langName] = lang
+    parserInstance.setLanguage(lang)
+  } catch (err) {
+    console.error(`Failed to load language: ${langName}`, err)
+    throw err
+  }
+}
+
+export function parseCode(code: string): Tree | null {
+  if (!parserInstance) return null
   
   try {
     return parserInstance.parse(code)

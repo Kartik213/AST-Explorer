@@ -2,15 +2,13 @@
 
 import React from "react"
 import { Tree } from "web-tree-sitter"
-import { initTreeSitter, parseCode } from "../lib/treesitter"
+import { initTreeSitter, parseCode, setLanguage } from "../lib/treesitter"
 import Editor, { OnMount } from "@monaco-editor/react"
 
-const exampleCode = `
+const languageExamples: Record<string, string> = {
+  javascript: `
 /**
  * Welcome to the AST Explorer!
- * 
- * Click on the tree nodes on the right to highlight
- * the corresponding code in this editor.
  */
 const ASTExplorer = ({ version }) => {
   const [active, setActive] = React.useState(true);
@@ -24,7 +22,69 @@ const ASTExplorer = ({ version }) => {
     </div>
   );
 };
+`,
+  typescript: `
+interface User {
+  id: number;
+  name: string;
+}
+
+function greet(user: User): string {
+  return \`Hello, \${user.name}!\`;
+}
+
+const user: User = { id: 1, name: "Kartik" };
+console.log(greet(user));
+`,
+  python: `
+def fibonacci(n):
+    if n <= 1:
+        return n
+    else:
+        return fibonacci(n-1) + fibonacci(n-2)
+
+# Test the function
+print(f"Fibonacci of 10 is: {fibonacci(10)}")
+`,
+  rust: `
+#[derive(Debug)]
+struct Point {
+    x: f64,
+    y: f64,
+}
+
+fn main() {
+    let p = Point { x: 1.0, y: 2.0 };
+    println!("Point: {:?}", p);
+}
+`,
+  c: `
+#include <stdio.h>
+
+int main() {
+    int n = 10;
+    int sum = 0;
+    for (int i = 1; i <= n; i++) {
+        sum += i;
+    }
+    printf("Sum of first %d integers is %d\\n", n, sum);
+    return 0;
+}
+`,
+  cpp: `
+#include <iostream>
+#include <vector>
+
+int main() {
+    std::vector<int> numbers = {1, 2, 3, 4, 5};
+    for (int n : numbers) {
+        std::cout << n << " ";
+    }
+    std::cout << std::endl;
+    return 0;
+}
 `
+}
 
 interface NodeRange {
   start: number
@@ -104,25 +164,27 @@ function ASTNodeView({
 
 export default function TreeSitterTest() {
   const [isReady, setIsReady] = React.useState(false)
-  const [code, setCode] = React.useState(exampleCode)
+  const [isLoadingLang, setIsLoadingLang] = React.useState(false)
+  const [code, setCode] = React.useState(languageExamples.javascript)
   const [AST, setAST] = React.useState<Tree | null>(null)
   const [selectedRange, setSelectedRange] = React.useState<NodeRange | null>(null)
   const [mounted, setMounted] = React.useState(false)
   const [isDarkMode, setIsDarkMode] = React.useState(false)
+  const [selectedLanguage, setSelectedLanguage] = React.useState("javascript")
 
   const editorRef = React.useRef<any>(null)
   const decorationsRef = React.useRef<string[]>([])
 
   React.useEffect(() => {
     setMounted(true)
-    // Detect initial theme
     setIsDarkMode(document.documentElement.classList.contains("dark") || window.matchMedia("(prefers-color-scheme: dark)").matches)
 
     ;(async () => {
       try {
         await initTreeSitter()
+        await setLanguage("javascript")
         setIsReady(true)
-        const tree = parseCode(exampleCode)
+        const tree = parseCode(languageExamples.javascript)
         setAST(tree)
       } catch (err) {
         console.error("Initialization error:", err)
@@ -130,8 +192,29 @@ export default function TreeSitterTest() {
     })()
   }, [])
 
+  // Handle language change
   React.useEffect(() => {
     if (!isReady) return
+
+    ;(async () => {
+      setIsLoadingLang(true)
+      try {
+        await setLanguage(selectedLanguage)
+        // Reset code to example if it's currently a different language's example
+        // (Optional: users might prefer keeping their code if they just switched JS -> TS)
+        // For now, let's just re-parse what's in the editor
+        const tree = parseCode(code)
+        setAST(tree)
+      } catch (err) {
+        console.error(`Error switching to ${selectedLanguage}:`, err)
+      } finally {
+        setIsLoadingLang(false)
+      }
+    })()
+  }, [selectedLanguage, isReady])
+
+  React.useEffect(() => {
+    if (!isReady || isLoadingLang) return
 
     const timeout = setTimeout(() => {
       const tree = parseCode(code)
@@ -139,7 +222,7 @@ export default function TreeSitterTest() {
     }, 50)
 
     return () => clearTimeout(timeout)
-  }, [code, isReady])
+  }, [code, isReady, isLoadingLang])
 
   // Update decorations in Monaco Editor
   React.useEffect(() => {
@@ -167,7 +250,6 @@ export default function TreeSitterTest() {
       }
     ])
 
-    // Reveal the range in view with a safe fallback
     const range = {
       startLineNumber: startPos.row + 1,
       startColumn: startPos.column + 1,
@@ -180,10 +262,30 @@ export default function TreeSitterTest() {
     } else if (typeof editorRef.current.revealRange === "function") {
       editorRef.current.revealRange(range)
     }
+
   }, [selectedRange])
 
   const handleEditorMount: OnMount = (editor) => {
     editorRef.current = editor
+  }
+
+  const handleLanguageChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
+    const newLang = e.target.value
+    setSelectedLanguage(newLang)
+    setCode(languageExamples[newLang] || "")
+    setSelectedRange(null)
+  }
+
+  const monacoLanguage = (lang: string) => {
+    switch (lang) {
+      case "javascript": return "javascript"
+      case "typescript": return "typescript"
+      case "python": return "python"
+      case "rust": return "rust"
+      case "c": return "c"
+      case "cpp": return "cpp"
+      default: return "javascript"
+    }
   }
 
   return (
@@ -204,11 +306,28 @@ export default function TreeSitterTest() {
           </div>
         </div>
         
-        <div className="flex items-center gap-4">
+        <div className="flex items-center gap-6">
+           {/* Language Selector */}
+           <div className="flex items-center gap-3">
+             <span className="text-[10px] font-black uppercase tracking-widest text-gray-400">Language:</span>
+             <select 
+               value={selectedLanguage}
+               onChange={handleLanguageChange}
+               className="bg-gray-100 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg px-3 py-1.5 text-xs font-bold focus:outline-none focus:ring-2 focus:ring-indigo-500 transition-all cursor-pointer"
+             >
+               <option value="javascript">JavaScript</option>
+               <option value="typescript">TypeScript</option>
+               <option value="python">Python</option>
+               <option value="rust">Rust</option>
+               <option value="c">C</option>
+               <option value="cpp">C++</option>
+             </select>
+           </div>
+
            <div className="flex items-center gap-2 px-4 py-1.5 bg-gray-100 dark:bg-gray-800/80 rounded-full border border-gray-200 dark:border-gray-700 shadow-inner">
-             <div className={`w-2 h-2 rounded-full ${isReady ? "bg-green-500 shadow-[0_0_8px_rgba(34,197,94,0.6)]" : "bg-yellow-500 animate-pulse"}`} />
+             <div className={`w-2 h-2 rounded-full ${isReady && !isLoadingLang ? "bg-green-500 shadow-[0_0_8px_rgba(34,197,94,0.6)]" : "bg-yellow-500 animate-pulse"}`} />
              <span className="text-xs font-bold text-gray-600 dark:text-gray-300">
-               {isReady ? "JavaScript Engine Ready" : "Initializing Engine..."}
+               {isReady ? (isLoadingLang ? "Switching Language..." : "Ready") : "Initializing Engine..."}
              </span>
            </div>
         </div>
@@ -243,10 +362,15 @@ export default function TreeSitterTest() {
               Clear
             </button>
           </div>
-          <div className="flex-1 min-h-0">
+          <div className="flex-1 min-h-0 relative">
+            {isLoadingLang && (
+              <div className="absolute inset-0 bg-background/50 backdrop-blur-sm z-10 flex items-center justify-center">
+                 <div className="w-8 h-8 border-t-2 border-indigo-500 rounded-full animate-spin" />
+              </div>
+            )}
             <Editor
               height="100%"
-              defaultLanguage="javascript"
+              language={monacoLanguage(selectedLanguage)}
               theme={mounted && isDarkMode ? "vs-dark" : "light"}
               value={code}
               onChange={(value) => {
@@ -283,7 +407,7 @@ export default function TreeSitterTest() {
             <div className="px-2 py-0.5 bg-blue-50 dark:bg-blue-900/20 text-blue-600 dark:text-blue-400 text-[9px] font-black rounded uppercase">Live</div>
           </div>
           <div className="flex-1 overflow-auto p-6 font-mono custom-scrollbar">
-            {AST ? (
+            {AST && !isLoadingLang ? (
               <div className="min-w-max pb-20">
                 <ASTNodeView 
                   node={AST.rootNode} 
@@ -295,11 +419,13 @@ export default function TreeSitterTest() {
             ) : (
               <div className="flex flex-col items-center justify-center h-full text-center p-12 opacity-50">
                 <div className="w-12 h-12 border-t-2 border-indigo-500 rounded-full animate-spin mb-6" />
-                <p className="text-sm font-bold tracking-tight text-gray-500">Constructing Graph...</p>
+                <p className="text-sm font-bold tracking-tight text-gray-500">
+                  {isLoadingLang ? "Loading Grammar..." : "Constructing Graph..."}
+                </p>
               </div>
             )}
             
-            {code.trim() === "" && (
+            {(code.trim() === "" && !isLoadingLang) && (
               <div className="absolute inset-0 flex items-center justify-center p-12 text-center bg-background/50 backdrop-blur-sm z-10 transition-opacity">
                  <div className="max-w-xs">
                     <p className="text-lg font-bold text-gray-300 dark:text-gray-700 mb-2">Editor Empty</p>
