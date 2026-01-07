@@ -12,7 +12,6 @@ import { useMonacoDecorations } from "@/hooks/useMonacoDecorations"
 import { NodeRange } from "@/types"
 
 export default function Explorer({languageParam, codeParam}: {languageParam: string; codeParam: string}) {
-  const [isDarkMode, setIsDarkMode] = useState(true)
   const [language, setLanguageState] = useState(languageParam ?? "javascript")
   const [code, setCode] = useState(codeParam ?? EXAMPLES[language] ?? "")
   const [selectedRange, setSelectedRange] = useState<NodeRange | null>(null)
@@ -52,7 +51,7 @@ export default function Explorer({languageParam, codeParam}: {languageParam: str
   }
 
   return (
-    <main className="h-screen flex flex-col bg-background text-foreground transition-all duration-300 font-sans overflow-hidden select-none">
+    <main className="h-screen flex flex-col bg-slate-50 text-slate-700 transition-all duration-300 font-sans overflow-hidden select-none">
       <Header 
         language={language}
         onLanguageChange={handleLanguageChange}
@@ -60,20 +59,20 @@ export default function Explorer({languageParam, codeParam}: {languageParam: str
         isLoading={isLoading}
       />
       
-      <section className="flex flex-1 flex-col xl:flex-row overflow-hidden p-4 lg:p-8 gap-4 lg:gap-8 bg-[#fcfcfd] dark:bg-[#050507]">
+      <section className="flex flex-1 flex-col xl:flex-row overflow-hidden p-4 lg:p-8 gap-4 lg:gap-8 bg-slate-50">
         <InstructionTooltip />
 
         {/* View Switcher (Mobile Only) */}
-        <div className="flex xl:hidden bg-slate-100 dark:bg-slate-900 p-1 rounded-xl border border-slate-200 dark:border-slate-800 shrink-0">
+        <div className="flex xl:hidden bg-slate-100 p-1 rounded-xl border border-slate-200 shrink-0">
           <button 
             onClick={() => setActiveView("editor")}
-            className={`flex-1 py-1.5 text-xs font-bold rounded-lg transition-all ${activeView === "editor" ? "bg-white dark:bg-slate-800 shadow-sm text-blue-600 dark:text-blue-400" : "text-slate-400"}`}
+            className={`flex-1 py-1.5 text-xs font-bold rounded-lg transition-all ${activeView === "editor" ? "bg-white shadow-sm text-blue-600" : "text-slate-400"}`}
           >
             Editor
           </button>
           <button 
             onClick={() => setActiveView("ast")}
-            className={`flex-1 py-1.5 text-xs font-bold rounded-lg transition-all ${activeView === "ast" ? "bg-white dark:bg-slate-800 shadow-sm text-blue-600 dark:text-blue-400" : "text-slate-400"}`}
+            className={`flex-1 py-1.5 text-xs font-bold rounded-lg transition-all ${activeView === "ast" ? "bg-white shadow-sm text-blue-600" : "text-slate-400"}`}
           >
             Syntax Tree
           </button>
@@ -85,7 +84,6 @@ export default function Explorer({languageParam, codeParam}: {languageParam: str
             onChange={handleEditorChange}
             onMount={(editor) => { editorRef.current = editor }}
             language={language}
-            isDarkMode={isDarkMode}
             isLoading={isLoading}
             onClear={handleClear}
           />
